@@ -8,40 +8,39 @@ from feature_extractor import extract_features
 import torch
 import torch.nn as nn
 import torchvision.models as models
+from huggingface_hub import hf_hub_download
 
 @st.cache_data
-def load_train_features():
-    with open("Resnet_train.pkl", "rb") as f:
+def load_numpy_pickle_from_huggingface(repo_id, filename):
+    file_path = hf_hub_download(repo_id=repo_id, filename=filename)
+    with open(file_path, "rb") as f:
         return np.array(pickle.load(f))
 
 @st.cache_data
-def load_train_images():
-    with open("RawPixels_train.pkl", "rb") as f:
+def load_pickle_from_huggingface(repo_id, filename):
+    file_path = hf_hub_download(repo_id=repo_id, filename=filename)
+    with open(file_path, "rb") as f:
         return pickle.load(f)
 
-@st.cache_data
-def load_labels():
-    with open("Labels_train.pkl", "rb") as f:
-        return pickle.load(f)
-
-# Load cached resources
-train_features = load_train_features()
-train_images = load_train_images()
-y_train = load_labels()
-
-# --- Load Trained Keras Model ---
-model = load_model("model.h5")
-
-# --- Load ResNet model from saved weights ---
 @st.cache_resource
-def load_resnet():
-    resnet = models.resnet50(weights=None)  # Do not download weights
+def load_resnet_from_huggingface(repo_id, filename):
+    file_path = hf_hub_download(repo_id=repo_id, filename=filename)
+    resnet = models.resnet50(weights=None)
     resnet = nn.Sequential(*list(resnet.children())[:-1])
-    resnet.load_state_dict(torch.load("resnet50_feature_extractor.pth", map_location=torch.device("cpu")))
+    resnet.load_state_dict(torch.load(file_path, map_location=torch.device("cpu")))
     resnet.eval()
     return resnet
 
-resnet = load_resnet()
+repo_id = "varaiitj/prmldemotest"
+
+train_features = load_numpy_pickle_from_huggingface(repo_id, "Resnet_train.pkl")
+train_images = load_pickle_from_huggingface(repo_id, "RawPixels_train.pkl")
+y_train = load_pickle_from_huggingface(repo_id, "Labels_train.pkl")
+resnet = load_resnet_from_huggingface(repo_id, "resnet50_feature_extractor.pth")
+
+
+# --- Load Trained Keras Model ---
+model = load_model("model.h5")
 
 # --- Streamlit App ---
 st.set_page_config(page_title="Image Classification & Retrieval", page_icon="🔍")
