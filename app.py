@@ -9,23 +9,39 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-# --- Load Feature Data ---
-with open("Resnet_train.pkl", "rb") as f:
-    train_features = np.array(pickle.load(f))
-train_features = np.array(train_features)
-with open("RawPixels_train.pkl", "rb") as f:
-    train_images = pickle.load(f)
+@st.cache_data
+def load_train_features():
+    with open("Resnet_train.pkl", "rb") as f:
+        return np.array(pickle.load(f))
 
-with open("Labels_train.pkl", "rb") as f:
-    y_train = pickle.load(f)
+@st.cache_data
+def load_train_images():
+    with open("RawPixels_train.pkl", "rb") as f:
+        return pickle.load(f)
+
+@st.cache_data
+def load_labels():
+    with open("Labels_train.pkl", "rb") as f:
+        return pickle.load(f)
+
+# Load cached resources
+train_features = load_train_features()
+train_images = load_train_images()
+y_train = load_labels()
 
 # --- Load Trained Keras Model ---
 model = load_model("model.h5")
 
-# --- Load ResNet model ---
-resnet = models.resnet50(pretrained=True)
-resnet = nn.Sequential(*list(resnet.children())[:-1])
-resnet.eval()
+# --- Load ResNet model from saved weights ---
+@st.cache_resource
+def load_resnet():
+    resnet = models.resnet50(weights=None)  # Do not download weights
+    resnet = nn.Sequential(*list(resnet.children())[:-1])
+    resnet.load_state_dict(torch.load("resnet50_feature_extractor.pth", map_location=torch.device("cpu")))
+    resnet.eval()
+    return resnet
+
+resnet = load_resnet()
 
 # --- Streamlit App ---
 st.set_page_config(page_title="Image Classification & Retrieval", page_icon="🔍")
@@ -33,7 +49,7 @@ st.title("🔍 **CIFAR-10 Image Classification & Similar Image Retrieval**")
 st.markdown("""
     Welcome to the CIFAR-10 Image Classification and Retrieval system. 
     Upload an image to get its predicted class and find similar images from our dataset.
-    """)
+""")
 
 # --- File Uploader with Instructions ---
 uploaded_file = st.file_uploader("Upload a Query Image (JPG/PNG)", type=["jpg", "jpeg", "png"])
@@ -62,10 +78,8 @@ if uploaded_file is not None:
         similarities = cosine_similarity(query_feature, filtered_features)[0]
         top5_indices = similarities.argsort()[-5:][::-1]
 
-        # --- Display Similar Images in a Clean Grid Layout ---
+        # --- Display Similar Images ---
         st.subheader("📸 **Top 5 Most Similar Images (Same Class)**:")
-        
-        # Create a 5-column layout for the similar images
         cols = st.columns(5)
         for i, idx in enumerate(top5_indices):
             with cols[i]:
